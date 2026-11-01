@@ -14,7 +14,7 @@ Novas versões instalam por cima da anterior (mesma assinatura), sem perder suas
 
 - **Carteiras**: crie quantas quiser, cada uma com uma média padrão (ex.: MM20 ou MME21).
 - **Resumo da carteira**: variação do dia (média simples da variação de todas as ações) e quantas estão acima/abaixo da média.
-- **Ações**: preço, variação do dia, mini gráfico dos últimos 60 pregões, valor da média e distância até ela. Lista ordenada com as ações em alta primeiro, depois as abaixo da média.
+- **Ações**: logo da empresa, preço, variação do dia, mini gráfico dos últimos 60 pregões, valor da média e distância até ela. Lista ordenada com as ações em alta primeiro, depois as abaixo da média.
 - **Médias**: simples (MMS) ou exponencial (MME), período de 2 a 500 pregões por ação, e modo **cruzamento de médias** (ex.: MM9 x MM21).
 - **Busca com autocompletar**: digite o ticker ou o nome da empresa.
 - **Alertas**: notificação quando a ação cruza para baixo da média. Opcionalmente, também quando volta para cima.
@@ -32,7 +32,7 @@ As médias usam os fechamentos diários, com o preço atual como último valor d
 
 ## Stack
 
-Kotlin · Jetpack Compose (Material 3) · Room · WorkManager · OkHttp. `minSdk 26` (Android 8.0).
+Kotlin · Jetpack Compose (Material 3) · Room · WorkManager · OkHttp · Coil (logos: brapi.dev para B3, Financial Modeling Prep para EUA). `minSdk 26` (Android 8.0).
 
 ## Compilar e testar
 

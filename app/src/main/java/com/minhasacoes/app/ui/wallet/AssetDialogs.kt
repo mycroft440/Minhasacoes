@@ -56,6 +56,7 @@ import com.minhasacoes.app.ui.components.MIN_PERIOD
 import com.minhasacoes.app.ui.components.MaTypeSelector
 import com.minhasacoes.app.ui.components.PeriodPresets
 import com.minhasacoes.app.ui.components.SmallSpinner
+import com.minhasacoes.app.ui.components.StockLogo
 import com.minhasacoes.app.ui.components.TrendChart
 import com.minhasacoes.app.ui.components.changeColor
 import com.minhasacoes.app.ui.components.parsePeriod
@@ -203,6 +204,8 @@ private fun SuggestionList(items: List<SymbolSuggestion>, onPick: (SymbolSuggest
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                StockLogo(s.symbol, size = 32.dp)
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         s.symbol.removeSuffix(".SA"),
@@ -274,14 +277,20 @@ fun AssetSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 16.dp)
         ) {
-            Text(asset.ticker, style = MaterialTheme.typography.headlineSmall)
-            Text(
-                asset.name ?: "",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StockLogo(asset.symbol, size = 52.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(asset.ticker, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        asset.name ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
 
             Spacer(Modifier.height(18.dp))
             Row(Modifier.fillMaxWidth()) {

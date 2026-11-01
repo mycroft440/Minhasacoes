@@ -2,6 +2,10 @@ package com.minhasacoes.app
 
 import android.app.Application
 import android.content.Context
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.SvgDecoder
+import coil.disk.DiskCache
 import androidx.room.Room
 import com.minhasacoes.app.data.Repository
 import com.minhasacoes.app.data.db.AppDatabase
@@ -17,7 +21,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-class App : Application() {
+class App : Application(), ImageLoaderFactory {
 
     /** Escopo do app: operações iniciadas pela interface continuam mesmo se a tela fechar. */
     val appScope = CoroutineScope(
@@ -45,6 +49,19 @@ class App : Application() {
                 }
         }
     }
+
+    /** Carregador de imagens dos logos: suporta SVG e guarda em cache no disco. */
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .components { add(SvgDecoder.Factory()) }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("logos"))
+                    .maxSizeBytes(30L * 1024 * 1024)
+                    .build()
+            }
+            .respectCacheHeaders(false)
+            .build()
 }
 
 val Context.app: App get() = applicationContext as App

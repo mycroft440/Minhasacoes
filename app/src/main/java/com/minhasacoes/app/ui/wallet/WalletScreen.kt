@@ -64,6 +64,7 @@ import com.minhasacoes.app.data.db.WalletWithAssets
 import com.minhasacoes.app.ui.components.BreadthBar
 import com.minhasacoes.app.ui.components.BreadthLegend
 import com.minhasacoes.app.ui.components.ConfirmDialog
+import com.minhasacoes.app.ui.components.StockLogo
 import com.minhasacoes.app.ui.components.TrendChart
 import com.minhasacoes.app.ui.components.WalletDialog
 import com.minhasacoes.app.ui.components.changeColor
@@ -315,7 +316,7 @@ private fun AssetRow(asset: AssetEntity, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TrendBadge(asset.state, stateColor)
+                StockLogo(asset.symbol)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(asset.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -356,28 +357,6 @@ private fun AssetRow(asset: AssetEntity, onClick: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
             StatusStrip(asset, stateColor)
-        }
-    }
-}
-
-@Composable
-private fun TrendBadge(state: String?, color: Color) {
-    Box(
-        Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (state) {
-            MaState.ABOVE -> Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Em alta", tint = color)
-            MaState.BELOW -> Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Em baixa", tint = color)
-            else -> Box(
-                Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
         }
     }
 }

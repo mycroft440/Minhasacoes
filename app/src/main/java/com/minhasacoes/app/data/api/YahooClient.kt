@@ -8,70 +8,59 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
-
-class SymbolNotFoundException : IOException("Ativo não encontrado")
 
 /**
- * Cotação de um ativo com o histórico de fechamentos diários (o último fechamento
- * já é o preço atual quando o pregão está aberto).
- */
-data class Quote(
-    val symbol: String,
-    val name: String?,
-    val currency: String?,
-    val price: Double,
-    val prevClose: Double?,
-    val closes: List<Double>,
-) {
-    /** Média móvel simples dos últimos [period] fechamentos, ou null se não houver histórico suficiente. */
-    fun sma(period: Int): Double? =
-        if (period < 1 || closes.size < period) null else closes.takeLast(period).average()
-}
-
-/**
- * Cliente gratuito do Yahoo Finance (endpoint público v8/chart, sem chave de API).
+ * Cliente gratuito do Yahoo Finance (endpoints públicos, sem chave de API).
  * Cobre ações da B3 (sufixo .SA), EUA, ETFs, FIIs e índices.
  */
-class YahooClient(
-    private val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build(),
-) {
+class YahooClient(private val http: OkHttpClient) {
 
     suspend fun fetch(symbol: String, range: String): Quote = withContext(Dispatchers.IO) {
+        val path = "/v8/finance/chart/${enc(symbol)}?range=$range&interval=1d&includePrePost=false"
+        YahooParser.parseChart(symbol, get(path))
+    }
+
+    suspend fun search(query: String): List<SymbolSuggestion> = withContext(Dispatchers.IO) {
+        val path = "/v1/finance/search?q=${enc(query)}&quotesCount=8&newsCount=0&listsCount=0&lang=pt-BR&region=BR"
+        YahooParser.parseSearch(get(path))
+    }
+
+    /** Tenta os dois servidores do Yahoo; "não encontrado" não é repetido. */
+    private fun get(path: String): String {
         var lastError: IOException? = null
         for (host in HOSTS) {
             try {
-                return@withContext request(host, symbol, range)
+                val request = Request.Builder()
+                    .url("https://$host$path")
+                    .header("User-Agent", BROWSER_USER_AGENT)
+                    .header("Accept", "application/json")
+                    .build()
+                http.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (response.code == 404) throw SymbolNotFoundException()
+                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                    return body
+                }
             } catch (e: SymbolNotFoundException) {
                 throw e
             } catch (e: IOException) {
                 lastError = e
             }
         }
-        throw lastError ?: IOException("Falha ao buscar cotação")
+        throw lastError ?: IOException("Falha ao acessar o Yahoo Finance")
     }
 
-    private fun request(host: String, symbol: String, range: String): Quote {
-        val encoded = URLEncoder.encode(symbol, "UTF-8")
-        val url = "https://$host/v8/finance/chart/$encoded?range=$range&interval=1d&includePrePost=false"
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", USER_AGENT)
-            .header("Accept", "application/json")
-            .build()
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
-        http.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (response.code == 404) throw SymbolNotFoundException()
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-            return parse(symbol, body)
-        }
+    companion object {
+        private val HOSTS = listOf("query1.finance.yahoo.com", "query2.finance.yahoo.com")
     }
+}
 
-    private fun parse(symbol: String, body: String): Quote {
+/** Interpretação das respostas do Yahoo (separada para testes). */
+object YahooParser {
+
+    fun parseChart(symbol: String, body: String): Quote {
         try {
             val chart = JSONObject(body).getJSONObject("chart")
             val result = chart.optJSONArray("result")?.optJSONObject(0)
@@ -139,24 +128,27 @@ class YahooClient(
         }
     }
 
-    companion object {
-        private val HOSTS = listOf("query1.finance.yahoo.com", "query2.finance.yahoo.com")
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+    private val ALLOWED_TYPES = setOf("EQUITY", "ETF", "INDEX", "MUTUALFUND")
 
-        /** Intervalo de histórico suficiente para calcular a média do período. */
-        fun rangeFor(period: Int): String = when {
-            period <= 100 -> "6mo"
-            period <= 200 -> "1y"
-            period <= 450 -> "2y"
-            else -> "5y"
-        }
+    /** Sugestões da busca, com ativos da B3 primeiro. */
+    fun parseSearch(body: String): List<SymbolSuggestion> {
+        val quotes = try {
+            JSONObject(body).optJSONArray("quotes")
+        } catch (e: JSONException) {
+            null
+        } ?: return emptyList()
 
-        /** "petr4" -> "PETR4.SA"; símbolos estrangeiros ficam como digitados. */
-        fun normalize(input: String): String {
-            val s = input.trim().uppercase().replace(" ", "")
-            val b3 = Regex("^([A-Z]{4}\\d{1,2})F?$").matchEntire(s)
-            return if (b3 != null) "${b3.groupValues[1]}.SA" else s
+        val out = ArrayList<SymbolSuggestion>()
+        for (i in 0 until quotes.length()) {
+            val q = quotes.optJSONObject(i) ?: continue
+            val symbol = q.optString("symbol")
+            if (symbol.isBlank()) continue
+            val type = q.optString("quoteType")
+            if (type.isNotBlank() && type !in ALLOWED_TYPES) continue
+            val name = q.optString("shortname").ifBlank { q.optString("longname") }.ifBlank { symbol }
+            val exchange = q.optString("exchDisp").ifBlank { q.optString("exchange") }.ifBlank { null }
+            out.add(SymbolSuggestion(symbol = symbol, name = name.trim(), exchange = exchange))
         }
+        return out.sortedBy { if (it.symbol.endsWith(".SA")) 0 else 1 }
     }
 }

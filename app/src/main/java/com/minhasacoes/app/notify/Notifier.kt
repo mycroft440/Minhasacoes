@@ -14,7 +14,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.minhasacoes.app.MainActivity
 import com.minhasacoes.app.R
+import com.minhasacoes.app.data.calc.MaType
+import com.minhasacoes.app.data.db.AssetEntity
 import com.minhasacoes.app.util.money
+import com.minhasacoes.app.util.ticker
 
 object Notifier {
 
@@ -47,24 +50,28 @@ object Notifier {
 
     fun notifyCross(
         context: Context,
-        assetId: Long,
-        walletId: Long,
-        ticker: String,
+        asset: AssetEntity,
         walletName: String,
         price: Double,
-        sma: Double,
-        period: Int,
+        ma: Double,
+        fastMa: Double?,
         currency: String?,
         below: Boolean,
     ) {
-        val title = if (below) "$ticker ficou abaixo da MM$period" else "$ticker voltou acima da MM$period"
-        val text = buildString {
-            append(money(price, currency))
-            append(" · média ")
-            append(money(sma, currency))
-            if (walletName.isNotBlank()) append(" · ").append(walletName)
+        val slow = MaType.label(asset.maType, asset.period)
+        val fastPeriod = asset.fastPeriod
+        val title: String
+        val text: String
+        if (fastPeriod != null && fastMa != null) {
+            val fast = MaType.label(asset.maType, fastPeriod)
+            title = if (below) "${asset.ticker}: $fast cruzou abaixo da $slow" else "${asset.ticker}: $fast cruzou acima da $slow"
+            text = "$fast ${money(fastMa, currency)} · $slow ${money(ma, currency)} · ${money(price, currency)}"
+        } else {
+            title = if (below) "${asset.ticker} ficou abaixo da $slow" else "${asset.ticker} voltou acima da $slow"
+            text = "${money(price, currency)} · média ${money(ma, currency)}"
         }
-        show(context, assetId.toInt(), walletId, title, text, if (below) COLOR_DOWN else COLOR_UP)
+        val full = if (walletName.isNotBlank()) "$text · $walletName" else text
+        show(context, asset.id.toInt(), asset.walletId, title, full, if (below) COLOR_DOWN else COLOR_UP)
     }
 
     fun sendTest(context: Context) {
@@ -83,6 +90,7 @@ object Notifier {
         if (!canNotify(context)) return
 
         val intent = Intent(context, MainActivity::class.java).apply {
+            action = "open_from_notification_$id"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (walletId != null) putExtra(EXTRA_WALLET_ID, walletId)
         }

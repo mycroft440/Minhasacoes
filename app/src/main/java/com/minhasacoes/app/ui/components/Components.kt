@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.minhasacoes.app.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -19,6 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.minhasacoes.app.data.calc.MaType
 import com.minhasacoes.app.ui.theme.AppTheme
 
 const val MIN_PERIOD = 2
@@ -131,12 +138,14 @@ fun WalletDialog(
     initialPeriod: Int = 20,
     showName: Boolean = true,
     showPeriod: Boolean = true,
+    initialType: String = MaType.SMA,
     periodHint: String? = null,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, period: Int) -> Unit,
+    onConfirm: (name: String, period: Int, maType: String) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var periodText by remember { mutableStateOf(initialPeriod.toString()) }
+    var maType by remember { mutableStateOf(MaType.of(initialType)) }
     val period = parsePeriod(periodText)
     val valid = (!showName || name.isNotBlank()) && (!showPeriod || period != null)
 
@@ -160,12 +169,13 @@ fun WalletDialog(
                     )
                 }
                 if (showPeriod) {
+                    MaTypeSelector(selected = maType, onSelect = { maType = it })
                     OutlinedTextField(
                         value = periodText,
                         onValueChange = { periodText = it.filter(Char::isDigit).take(3) },
                         label = { Text("Média móvel (períodos)") },
                         supportingText = {
-                            Text(periodHint ?: "Média simples de $MIN_PERIOD a $MAX_PERIOD pregões")
+                            Text(periodHint ?: "De $MIN_PERIOD a $MAX_PERIOD pregões")
                         },
                         isError = periodText.isNotEmpty() && period == null,
                         singleLine = true,
@@ -179,7 +189,7 @@ fun WalletDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name, period ?: initialPeriod) },
+                onClick = { onConfirm(name, period ?: initialPeriod, maType) },
                 enabled = valid,
             ) { Text(confirmLabel) }
         },
@@ -198,7 +208,7 @@ fun PeriodPresets(onPick: (Int) -> Unit, modifier: Modifier = Modifier) {
                     .clickable { onPick(p) }
                     .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
-                Text("MM$p", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("$p", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -229,4 +239,19 @@ fun ConfirmDialog(
 @Composable
 fun SmallSpinner(color: Color = MaterialTheme.colorScheme.primary) {
     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = color)
+}
+
+/** Escolha entre média simples e exponencial. */
+@Composable
+fun MaTypeSelector(selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    val options = listOf(MaType.SMA to "Simples", MaType.EMA to "Exponencial")
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (type, label) ->
+            SegmentedButton(
+                selected = MaType.of(selected) == type,
+                onClick = { onSelect(type) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+            ) { Text(label) }
+        }
+    }
 }

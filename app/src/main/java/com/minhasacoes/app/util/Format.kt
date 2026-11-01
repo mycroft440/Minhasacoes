@@ -1,7 +1,8 @@
 package com.minhasacoes.app.util
 
 import com.minhasacoes.app.data.db.AssetEntity
-import com.minhasacoes.app.data.db.MaState
+import com.minhasacoes.app.data.calc.MaState
+import com.minhasacoes.app.data.calc.MaType
 import com.minhasacoes.app.data.db.WalletWithAssets
 import java.text.NumberFormat
 import java.time.Instant
@@ -40,13 +41,34 @@ val AssetEntity.dayChange: Double?
         return if (prev > 0) (p / prev - 1.0) * 100.0 else null
     }
 
-/** Distância do preço até a média em %. */
+/** Modo cruzamento: média rápida x média principal. */
+val AssetEntity.isCrossMode: Boolean get() = fastPeriod != null
+
+/** Rótulo da média principal (MM20 / MME20). */
+val AssetEntity.maLabel: String get() = MaType.label(maType, period)
+
+/** Rótulo da média rápida, se houver. */
+val AssetEntity.fastLabel: String? get() = fastPeriod?.let { MaType.label(maType, it) }
+
+/** Distância em %: preço x média, ou média rápida x média principal no modo cruzamento. */
 val AssetEntity.distanceToSma: Double?
     get() {
-        val p = price ?: return null
+        val p = (if (isCrossMode) fastMa else price) ?: return null
         val m = sma ?: return null
         return if (m > 0) (p / m - 1.0) * 100.0 else null
     }
+
+/** Ordem da lista: em alta primeiro, depois abaixo da média, depois sem dados; alfabética em cada grupo. */
+fun List<AssetEntity>.sortedByTrend(): List<AssetEntity> =
+    sortedWith(
+        compareBy<AssetEntity> {
+            when (it.state) {
+                MaState.ABOVE -> 0
+                MaState.BELOW -> 1
+                else -> 2
+            }
+        }.thenBy { it.ticker }
+    )
 
 data class WalletSummary(
     val dayChange: Double?,

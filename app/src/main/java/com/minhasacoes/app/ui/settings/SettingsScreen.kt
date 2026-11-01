@@ -29,6 +29,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -64,6 +66,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     val notifyAbove by repo.notifyAbove.collectAsStateWithLifecycle()
     val refreshing by repo.refreshing.collectAsStateWithLifecycle()
     val lastUpdate by repo.lastUpdate.collectAsStateWithLifecycle()
+    val savedToken by repo.brapiToken.collectAsStateWithLifecycle()
+    var tokenText by remember { mutableStateOf(savedToken) }
 
     var canNotify by remember { mutableStateOf(Notifier.canNotify(context)) }
 
@@ -154,7 +158,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Text("Atualização", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "Automática a cada hora. ${updatedLabel(lastUpdate)}.",
+                            "A cada hora durante o pregão e uma vez após o fechamento. ${updatedLabel(lastUpdate)}.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -170,9 +174,39 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            SettingsCard {
+                Text("Fonte reserva (B3)", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Se o Yahoo Finance falhar, as ações da B3 são buscadas na brapi.dev. " +
+                        "Sem token só funcionam PETR4, VALE3, ITUB4 e MGLU3; crie um token grátis em brapi.dev " +
+                        "para liberar as demais (histórico de 3 meses, médias de até ~60 períodos).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = tokenText,
+                    onValueChange = { tokenText = it.trim().take(200) },
+                    label = { Text("Token brapi.dev (opcional)") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (tokenText != savedToken) {
+                    Spacer(Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = { repo.setBrapiToken(tokenText) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("Salvar token") }
+                }
+            }
+
             Text(
                 "Cotações gratuitas do Yahoo Finance, com atraso de até 15 minutos. " +
-                    "A média móvel simples usa os fechamentos diários, com o preço atual como último valor. " +
+                    "As médias usam os fechamentos diários, com o preço atual como último valor. " +
                     "Não é recomendação de investimento.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -57,18 +57,25 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minhasacoes.app.app
 import com.minhasacoes.app.data.db.AssetEntity
-import com.minhasacoes.app.data.db.MaState
+import com.minhasacoes.app.data.calc.Indicators
+import com.minhasacoes.app.data.calc.MaState
+import com.minhasacoes.app.data.calc.MaType
 import com.minhasacoes.app.data.db.WalletWithAssets
 import com.minhasacoes.app.ui.components.BreadthBar
 import com.minhasacoes.app.ui.components.BreadthLegend
 import com.minhasacoes.app.ui.components.ConfirmDialog
+import com.minhasacoes.app.ui.components.TrendChart
 import com.minhasacoes.app.ui.components.WalletDialog
 import com.minhasacoes.app.ui.components.changeColor
 import com.minhasacoes.app.ui.theme.AppTheme
 import com.minhasacoes.app.util.dayChange
 import com.minhasacoes.app.util.distanceToSma
+import com.minhasacoes.app.util.fastLabel
+import com.minhasacoes.app.util.isCrossMode
+import com.minhasacoes.app.util.maLabel
 import com.minhasacoes.app.util.money
 import com.minhasacoes.app.util.pct
+import com.minhasacoes.app.util.sortedByTrend
 import com.minhasacoes.app.util.summary
 import com.minhasacoes.app.util.ticker
 import com.minhasacoes.app.util.updatedLabel
@@ -157,7 +164,7 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
                 .padding(padding),
         ) {
             if (current != null) {
-                val assets = remember(current.assets) { current.assets.sortedBy { it.ticker } }
+                val assets = remember(current.assets) { current.assets.sortedByTrend() }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 112.dp),
@@ -190,8 +197,10 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
         when (dialog) {
             WalletDialogKind.ADD -> AddAssetDialog(
                 defaultPeriod = wallet.defaultPeriod,
+                defaultType = MaType.of(wallet.defaultMaType),
                 onDismiss = { dialog = WalletDialogKind.NONE },
-                onAdd = { ticker, period -> repo.addAsset(wallet.id, ticker, period) },
+                onSearch = { query -> repo.search(query) },
+                onAdd = { ticker, config -> repo.addAsset(wallet.id, ticker, config) },
             )
 
             WalletDialogKind.RENAME -> WalletDialog(
@@ -200,7 +209,7 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
                 initialName = wallet.name,
                 showPeriod = false,
                 onDismiss = { dialog = WalletDialogKind.NONE },
-                onConfirm = { name, _ ->
+                onConfirm = { name, _, _ ->
                     dialog = WalletDialogKind.NONE
                     app.appScope.launch { repo.renameWallet(wallet.id, name) }
                 },
@@ -210,12 +219,13 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
                 title = "Média padrão",
                 confirmLabel = "Aplicar",
                 initialPeriod = wallet.defaultPeriod,
+                initialType = MaType.of(wallet.defaultMaType),
                 showName = false,
                 periodHint = "Aplica a todas as ações desta carteira",
                 onDismiss = { dialog = WalletDialogKind.NONE },
-                onConfirm = { _, period ->
+                onConfirm = { _, period, maType ->
                     dialog = WalletDialogKind.NONE
-                    app.appScope.launch { repo.setWalletPeriod(wallet.id, period) }
+                    app.appScope.launch { repo.setWalletDefaults(wallet.id, period, maType) }
                 },
             )
 
@@ -241,9 +251,9 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
         AssetSheet(
             asset = selected,
             onDismiss = { selectedAssetId = null },
-            onSave = { period, alert ->
+            onSave = { config, alert ->
                 selectedAssetId = null
-                app.appScope.launch { repo.updateAsset(selected.id, period, alert) }
+                app.appScope.launch { repo.updateAsset(selected.id, config, alert) }
             },
             onRemove = {
                 selectedAssetId = null
@@ -277,7 +287,7 @@ private fun SummaryCard(data: WalletWithAssets, lastUpdate: Long) {
             Spacer(Modifier.height(16.dp))
             BreadthBar(above = s.above, below = s.below)
             Spacer(Modifier.height(10.dp))
-            BreadthLegend(above = s.above, below = s.below, trailing = "MM${data.wallet.defaultPeriod}")
+            BreadthLegend(above = s.above, below = s.below, trailing = MaType.label(data.wallet.defaultMaType, data.wallet.defaultPeriod))
             Spacer(Modifier.height(12.dp))
             Text(
                 updatedLabel(lastUpdate),
@@ -318,6 +328,22 @@ private fun AssetRow(asset: AssetEntity, onClick: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.width(8.dp))
+                val closes = remember(asset.chartCloses) { Indicators.decode(asset.chartCloses) }
+                val maLine = remember(asset.chartMa) { Indicators.decode(asset.chartMa) }
+                if (closes.size >= 2) {
+                    TrendChart(
+                        closes = closes,
+                        ma = maLine,
+                        fast = null,
+                        priceColor = stateColor,
+                        maColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        fastColor = Color.Transparent,
+                        priceWidth = 1.6.dp,
+                        maWidth = 1.dp,
+                        modifier = Modifier.size(width = 64.dp, height = 30.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         money(asset.price, asset.currency),
@@ -360,9 +386,13 @@ private fun TrendBadge(state: String?, color: Color) {
 private fun StatusStrip(asset: AssetEntity, color: Color) {
     val (label, detail) = when {
         asset.price == null -> (asset.error ?: "Aguardando cotação") to null
-        asset.sma == null -> "Histórico insuficiente para MM${asset.period}" to null
-        asset.state == MaState.BELOW -> "Abaixo da MM${asset.period}" to pct(asset.distanceToSma)
-        else -> "Acima da MM${asset.period}" to pct(asset.distanceToSma)
+        asset.sma == null || (asset.isCrossMode && asset.fastMa == null) ->
+            "Histórico insuficiente para ${asset.maLabel}" to null
+        asset.isCrossMode && asset.state == MaState.BELOW ->
+            "${asset.fastLabel} abaixo da ${asset.maLabel}" to pct(asset.distanceToSma)
+        asset.isCrossMode -> "${asset.fastLabel} acima da ${asset.maLabel}" to pct(asset.distanceToSma)
+        asset.state == MaState.BELOW -> "Abaixo da ${asset.maLabel}" to pct(asset.distanceToSma)
+        else -> "Acima da ${asset.maLabel}" to pct(asset.distanceToSma)
     }
     Row(
         Modifier
@@ -382,7 +412,7 @@ private fun StatusStrip(asset: AssetEntity, color: Color) {
         )
         if (detail != null) {
             Text(
-                "${money(asset.sma, asset.currency)}  ·  $detail",
+                if (asset.isCrossMode) detail else "${money(asset.sma, asset.currency)}  ·  $detail",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

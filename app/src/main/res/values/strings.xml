@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Minhas Ações</string>
+    <string name="widget_description">Variação do dia das suas carteiras e ações acima/abaixo da média</string>
+    <string name="widget_empty">Crie uma carteira no app</string>
 </resources>

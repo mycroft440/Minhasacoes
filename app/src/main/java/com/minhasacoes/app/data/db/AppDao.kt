@@ -16,6 +16,10 @@ interface AppDao {
     fun observeWallets(): Flow<List<WalletWithAssets>>
 
     @Transaction
+    @Query("SELECT * FROM wallets ORDER BY createdAt ASC")
+    suspend fun walletsOnce(): List<WalletWithAssets>
+
+    @Transaction
     @Query("SELECT * FROM wallets WHERE id = :id")
     fun observeWallet(id: Long): Flow<WalletWithAssets?>
 
@@ -28,8 +32,8 @@ interface AppDao {
     @Query("UPDATE wallets SET name = :name WHERE id = :id")
     suspend fun renameWallet(id: Long, name: String)
 
-    @Query("UPDATE wallets SET defaultPeriod = :period WHERE id = :id")
-    suspend fun setWalletPeriod(id: Long, period: Int)
+    @Query("UPDATE wallets SET defaultPeriod = :period, defaultMaType = :maType WHERE id = :id")
+    suspend fun setWalletDefaults(id: Long, period: Int, maType: String)
 
     @Query("DELETE FROM wallets WHERE id = :id")
     suspend fun deleteWallet(id: Long)
@@ -51,15 +55,31 @@ interface AppDao {
     @Insert
     suspend fun insertAsset(asset: AssetEntity): Long
 
-    @Query("UPDATE assets SET period = :period, alertEnabled = :alertEnabled, state = :state WHERE id = :id")
-    suspend fun updateAssetSettings(id: Long, period: Int, alertEnabled: Boolean, state: String?)
+    @Query(
+        "UPDATE assets SET period = :period, maType = :maType, fastPeriod = :fastPeriod, " +
+            "alertEnabled = :alertEnabled, state = :state WHERE id = :id"
+    )
+    suspend fun updateAssetSettings(
+        id: Long,
+        period: Int,
+        maType: String,
+        fastPeriod: Int?,
+        alertEnabled: Boolean,
+        state: String?,
+    )
 
-    @Query("UPDATE assets SET period = :period, state = NULL WHERE walletId = :walletId")
-    suspend fun setPeriodForWallet(walletId: Long, period: Int)
+    /** Aplica a média padrão a todas as ações; a média rápida só é mantida se continuar menor. */
+    @Query(
+        "UPDATE assets SET period = :period, maType = :maType, state = NULL, " +
+            "fastPeriod = CASE WHEN fastPeriod IS NOT NULL AND fastPeriod < :period THEN fastPeriod ELSE NULL END " +
+            "WHERE walletId = :walletId"
+    )
+    suspend fun applyDefaultsToWallet(walletId: Long, period: Int, maType: String)
 
     @Query(
         "UPDATE assets SET name = :name, currency = :currency, price = :price, prevClose = :prevClose, " +
-            "sma = :sma, state = :state, updatedAt = :updatedAt, error = NULL WHERE id = :id"
+            "sma = :ma, fastMa = :fastMa, state = :state, updatedAt = :updatedAt, error = NULL, " +
+            "chartCloses = :chartCloses, chartMa = :chartMa, chartFast = :chartFast WHERE id = :id"
     )
     suspend fun updateMarket(
         id: Long,
@@ -67,9 +87,13 @@ interface AppDao {
         currency: String?,
         price: Double,
         prevClose: Double?,
-        sma: Double?,
+        ma: Double?,
+        fastMa: Double?,
         state: String?,
         updatedAt: Long,
+        chartCloses: String?,
+        chartMa: String?,
+        chartFast: String?,
     )
 
     @Query("UPDATE assets SET error = :error WHERE id = :id")

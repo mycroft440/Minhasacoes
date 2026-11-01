@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.minhasacoes.app.app
+import com.minhasacoes.app.data.calc.MaType
 import com.minhasacoes.app.data.db.WalletWithAssets
 import com.minhasacoes.app.ui.components.BreadthBar
 import com.minhasacoes.app.ui.components.BreadthLegend
@@ -72,10 +73,11 @@ fun HomeScreen(
     val lastUpdate by repo.lastUpdate.collectAsStateWithLifecycle()
     var showCreate by remember { mutableStateOf(false) }
 
-    // Ao abrir o app, atualiza se os dados tiverem mais de 30 minutos.
+    // Ao abrir o app, atualiza se os dados tiverem mais de 30 minutos e o mercado
+    // estiver aberto (ou se o fechamento ainda não foi registrado).
     LaunchedEffect(Unit) {
         if (System.currentTimeMillis() - repo.lastUpdate.value > 30 * 60 * 1000L) {
-            app.appScope.launch { repo.refreshAll() }
+            app.appScope.launch { if (repo.shouldAutoRefresh()) repo.refreshAll() }
         }
     }
 
@@ -124,9 +126,9 @@ fun HomeScreen(
             title = "Nova carteira",
             confirmLabel = "Criar",
             onDismiss = { showCreate = false },
-            onConfirm = { name, period ->
+            onConfirm = { name, period, maType ->
                 showCreate = false
-                app.appScope.launch { repo.createWallet(name, period) }
+                app.appScope.launch { repo.createWallet(name, period, maType) }
             },
         )
     }
@@ -179,7 +181,7 @@ private fun WalletCard(data: WalletWithAssets, onClick: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
-                Chip("MM${data.wallet.defaultPeriod}")
+                Chip(MaType.label(data.wallet.defaultMaType, data.wallet.defaultPeriod))
             }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.Bottom) {

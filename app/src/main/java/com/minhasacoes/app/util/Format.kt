@@ -3,10 +3,12 @@ package com.minhasacoes.app.util
 import com.minhasacoes.app.data.db.AssetEntity
 import com.minhasacoes.app.data.calc.MaState
 import com.minhasacoes.app.data.calc.MaType
+import com.minhasacoes.app.data.calc.Monthly
 import com.minhasacoes.app.data.db.WalletWithAssets
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Currency
@@ -101,3 +103,11 @@ fun updatedLabel(millis: Long): String {
         "Atualizado em ${dt.format(DATE_TIME)}"
     }
 }
+
+/** Rentabilidade mês a mês da ação (o mês corrente usa o preço atual). */
+fun AssetEntity.monthlyReturns(): Map<YearMonth, Double> =
+    Monthly.returns(Monthly.decode(monthly), price, YearMonth.now())
+
+/** Rentabilidade mensal da carteira: média simples das ações em cada mês. */
+fun WalletWithAssets.monthlyReturns(): Map<YearMonth, Double> =
+    Monthly.average(assets.map { it.monthlyReturns() })

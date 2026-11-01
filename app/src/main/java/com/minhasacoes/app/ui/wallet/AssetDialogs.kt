@@ -55,6 +55,7 @@ import com.minhasacoes.app.ui.components.MAX_PERIOD
 import com.minhasacoes.app.ui.components.MIN_PERIOD
 import com.minhasacoes.app.ui.components.MaTypeSelector
 import com.minhasacoes.app.ui.components.PeriodPresets
+import com.minhasacoes.app.ui.components.MonthlyReturnsCard
 import com.minhasacoes.app.ui.components.SmallSpinner
 import com.minhasacoes.app.ui.components.StockLogo
 import com.minhasacoes.app.ui.components.TrendChart
@@ -63,6 +64,7 @@ import com.minhasacoes.app.ui.components.parsePeriod
 import com.minhasacoes.app.ui.theme.AppTheme
 import com.minhasacoes.app.util.distanceToSma
 import com.minhasacoes.app.util.money
+import com.minhasacoes.app.util.monthlyReturns
 import com.minhasacoes.app.util.pct
 import com.minhasacoes.app.util.ticker
 import kotlinx.coroutines.CancellationException
@@ -326,6 +328,12 @@ fun AssetSheet(
                     fastLabel = asset.fastPeriod?.let { MaType.label(asset.maType, it) },
                     days = closes.size,
                 )
+            }
+
+            val monthly = remember(asset.monthly, asset.price) { asset.monthlyReturns() }
+            if (monthly.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                MonthlyReturnsCard(returns = monthly, title = "Rentabilidade mensal", bordered = false)
             }
 
             Spacer(Modifier.height(24.dp))

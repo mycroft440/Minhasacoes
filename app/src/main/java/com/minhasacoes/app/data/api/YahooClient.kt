@@ -1,5 +1,6 @@
 package com.minhasacoes.app.data.api
 
+import com.minhasacoes.app.data.calc.MonthClose
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -8,6 +9,9 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneOffset
 
 /**
  * Cliente gratuito do Yahoo Finance (endpoints públicos, sem chave de API).
@@ -18,6 +22,12 @@ class YahooClient(private val http: OkHttpClient) {
     suspend fun fetch(symbol: String, range: String): Quote = withContext(Dispatchers.IO) {
         val path = "/v8/finance/chart/${enc(symbol)}?range=$range&interval=1d&includePrePost=false"
         YahooParser.parseChart(symbol, get(path))
+    }
+
+    /** Fechamentos mensais dos últimos 5 anos (para a rentabilidade mês a mês). */
+    suspend fun fetchMonthly(symbol: String): List<MonthClose> = withContext(Dispatchers.IO) {
+        val path = "/v8/finance/chart/${enc(symbol)}?range=5y&interval=1mo&includePrePost=false"
+        YahooParser.parseMonthly(get(path))
     }
 
     suspend fun search(query: String): List<SymbolSuggestion> = withContext(Dispatchers.IO) {
@@ -123,6 +133,36 @@ object YahooParser {
                 prevClose = prevClose,
                 closes = closes,
             )
+        } catch (e: JSONException) {
+            throw IOException("Resposta inválida", e)
+        }
+    }
+
+    /**
+     * Fechamentos mensais. O Yahoo às vezes repete o mês corrente com o horário do último
+     * pregão; fica valendo o último valor de cada mês.
+     */
+    fun parseMonthly(body: String): List<MonthClose> {
+        try {
+            val result = JSONObject(body).getJSONObject("chart").optJSONArray("result")?.optJSONObject(0)
+                ?: throw SymbolNotFoundException()
+            val gmtOffset = result.optJSONObject("meta")?.optLong("gmtoffset", 0L) ?: 0L
+            val timestamps = result.optJSONArray("timestamp") ?: return emptyList()
+            val closeArray = result.optJSONObject("indicators")
+                ?.optJSONArray("quote")
+                ?.optJSONObject(0)
+                ?.optJSONArray("close") ?: return emptyList()
+
+            val byMonth = sortedMapOf<YearMonth, Double>()
+            val n = minOf(timestamps.length(), closeArray.length())
+            for (i in 0 until n) {
+                if (closeArray.isNull(i)) continue
+                val c = closeArray.optDouble(i)
+                if (c.isNaN() || c <= 0) continue
+                val date = Instant.ofEpochSecond(timestamps.optLong(i) + gmtOffset).atZone(ZoneOffset.UTC).toLocalDate()
+                byMonth[YearMonth.from(date)] = c
+            }
+            return byMonth.map { (m, c) -> MonthClose(m, c) }
         } catch (e: JSONException) {
             throw IOException("Resposta inválida", e)
         }

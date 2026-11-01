@@ -96,6 +96,9 @@ interface AppDao {
         chartFast: String?,
     )
 
+    @Query("UPDATE assets SET monthly = :monthly, monthlyAt = :at WHERE symbol = :symbol")
+    suspend fun setMonthly(symbol: String, monthly: String, at: Long)
+
     @Query("UPDATE assets SET error = :error WHERE id = :id")
     suspend fun setError(id: Long, error: String)
 

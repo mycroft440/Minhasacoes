@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [WalletEntity::class, AssetEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +24,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE assets ADD COLUMN chartMa TEXT")
                 db.execSQL("ALTER TABLE assets ADD COLUMN chartFast TEXT")
                 db.execSQL("ALTER TABLE wallets ADD COLUMN defaultMaType TEXT")
+            }
+        }
+
+        /** v2 -> v3: fechamentos mensais para a rentabilidade mês a mês. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE assets ADD COLUMN monthly TEXT")
+                db.execSQL("ALTER TABLE assets ADD COLUMN monthlyAt INTEGER")
             }
         }
     }

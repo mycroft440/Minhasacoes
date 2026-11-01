@@ -34,7 +34,7 @@ class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         val db = Room.databaseBuilder(this, AppDatabase::class.java, "minhasacoes.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
         repository = Repository(this, db)
         Notifier.createChannel(this)

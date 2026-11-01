@@ -40,6 +40,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,7 @@ import com.minhasacoes.app.data.db.WalletWithAssets
 import com.minhasacoes.app.ui.components.BreadthBar
 import com.minhasacoes.app.ui.components.BreadthLegend
 import com.minhasacoes.app.ui.components.ConfirmDialog
+import com.minhasacoes.app.ui.components.MonthlyReturnsCard
 import com.minhasacoes.app.ui.components.StockLogo
 import com.minhasacoes.app.ui.components.TrendChart
 import com.minhasacoes.app.ui.components.WalletDialog
@@ -75,6 +77,7 @@ import com.minhasacoes.app.util.fastLabel
 import com.minhasacoes.app.util.isCrossMode
 import com.minhasacoes.app.util.maLabel
 import com.minhasacoes.app.util.money
+import com.minhasacoes.app.util.monthlyReturns
 import com.minhasacoes.app.util.pct
 import com.minhasacoes.app.util.sortedByTrend
 import com.minhasacoes.app.util.summary
@@ -98,6 +101,10 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
     var selectedAssetId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val wallet = data?.wallet
+
+    LaunchedEffect(walletId) {
+        app.appScope.launch { repo.fillMissingMonthly(walletId) }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -166,12 +173,18 @@ fun WalletScreen(walletId: Long, onBack: () -> Unit) {
         ) {
             if (current != null) {
                 val assets = remember(current.assets) { current.assets.sortedByTrend() }
+                val monthly = remember(current.assets) { current.monthlyReturns() }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 112.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     item(key = "summary") { SummaryCard(current, lastUpdate) }
+                    if (monthly.isNotEmpty()) {
+                        item(key = "monthly") {
+                            MonthlyReturnsCard(returns = monthly, title = "Rentabilidade mensal (média das ações)")
+                        }
+                    }
                     if (assets.isEmpty()) {
                         item(key = "empty") { EmptyAssets() }
                     } else {

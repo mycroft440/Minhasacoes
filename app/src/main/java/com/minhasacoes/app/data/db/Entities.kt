@@ -49,6 +49,10 @@ data class AssetEntity(
     val chartCloses: String? = null,
     val chartMa: String? = null,
     val chartFast: String? = null,
+    // v3
+    /** Fechamentos mensais (ver Monthly.encode) e quando foram buscados. */
+    val monthly: String? = null,
+    val monthlyAt: Long? = null,
 )
 
 data class WalletWithAssets(

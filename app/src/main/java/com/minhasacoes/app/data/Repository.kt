@@ -10,6 +10,7 @@ import com.minhasacoes.app.data.api.YahooClient
 import com.minhasacoes.app.data.calc.Indicators
 import com.minhasacoes.app.data.calc.MaType
 import com.minhasacoes.app.data.calc.MarketHours
+import com.minhasacoes.app.data.calc.Monthly
 import com.minhasacoes.app.data.db.AppDatabase
 import com.minhasacoes.app.data.db.AssetEntity
 import com.minhasacoes.app.data.db.WalletEntity
@@ -145,6 +146,7 @@ class Repository(
                 chartFast = eval.chartFast?.let { Indicators.encode(it) },
             )
         )
+        refreshMonthly(symbol)
     }
 
     suspend fun updateAsset(id: Long, config: MaConfig, alertEnabled: Boolean) {
@@ -251,9 +253,37 @@ class Repository(
                         chartFast = eval.chartFast?.let { Indicators.encode(it) },
                     )
                 }
+
+                // Fechamentos mensais mudam pouco: busca no máximo uma vez a cada 12 horas.
+                val monthlyAge = group.minOf { it.monthlyAt ?: 0L }
+                if (System.currentTimeMillis() - monthlyAge > MONTHLY_MAX_AGE_MS) {
+                    delay(REQUEST_GAP_MS)
+                    refreshMonthly(symbol)
+                }
             }
         } finally {
             _refreshing.value = false
+        }
+    }
+
+    /** Busca a rentabilidade mensal das ações que ainda não têm (ex.: após atualizar o app). */
+    suspend fun fillMissingMonthly(walletId: Long) {
+        val missing = dao.assetsOfWallet(walletId).filter { it.monthly.isNullOrBlank() }.map { it.symbol }.distinct()
+        for ((i, symbol) in missing.withIndex()) {
+            if (i > 0) delay(REQUEST_GAP_MS)
+            refreshMonthly(symbol)
+        }
+    }
+
+    /** Busca os fechamentos mensais; falhas são ignoradas (mantém os dados anteriores). */
+    private suspend fun refreshMonthly(symbol: String) {
+        try {
+            val closes = yahoo.fetchMonthly(symbol)
+            if (closes.isNotEmpty()) dao.setMonthly(symbol, Monthly.encode(closes), System.currentTimeMillis())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // sem rentabilidade mensal por enquanto
         }
     }
 
@@ -290,5 +320,6 @@ class Repository(
         private const val KEY_NOTIFY_ABOVE = "notify_above"
         private const val KEY_BRAPI_TOKEN = "brapi_token"
         private const val REQUEST_GAP_MS = 350L
+        private const val MONTHLY_MAX_AGE_MS = 12 * 60 * 60 * 1000L
     }
 }
